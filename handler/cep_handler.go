@@ -58,12 +58,13 @@ func GetCepValue(w http.ResponseWriter, r *http.Request) {
 	cep := chi.URLParam(r, "cep")
 
 	apicepUrl := "https://cdn.apicep.com/file/apicep/" + cep + ".json"
-	// viacepUrl := "http://viacep.com.br/ws/" + cep + "/json/"
+	viacepUrl := "http://viacep.com.br/ws/" + cep + "/json/"
 
 	if cep == "" {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
+
 	fmt.Printf("cep recebido: %s \n", cep)
 	fmt.Println()
 
@@ -93,26 +94,48 @@ func GetCepValue(w http.ResponseWriter, r *http.Request) {
 			Cidade:     apiResponse.City,
 			Bairro:     apiResponse.District,
 			UF:         apiResponse.State,
+			Tipo:       "apicep",
 		}
 
 		ch1 <- response
 	}()
 
 	go func() {
-		time.Sleep(time.Second * 10)
-		ch2 <- Cep{}
+		req, err := http.Get(viacepUrl)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Erro ao buscar cep: %s, erro: %v", cep, err)
+		}
+
+		defer req.Body.Close()
+		res, err := io.ReadAll(req.Body)
+
+		var apiResponse ViacepStruct
+		err = json.Unmarshal(res, &apiResponse)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Erro ao buscar cep: %s, erro: %v", cep, err)
+		}
+
+		response := Cep{
+			Cep:        apiResponse.Cep,
+			Logradouro: apiResponse.Logradouro,
+			Cidade:     apiResponse.Localidade,
+			Bairro:     apiResponse.Bairro,
+			UF:         apiResponse.Uf,
+			Tipo:       "viacep",
+		}
+		ch2 <- response
 	}()
 
 	tipo := ""
 
 	select {
 	case msg1 := <-ch1:
-		fmt.Printf("msg 01 %s \n", msg1)
 		tipo = "apicep"
+		fmt.Printf("cep: %s \n tipo: %s \n", msg1, tipo)
 	case msg2 := <-ch2:
-		fmt.Printf("msg 02 %s \n", msg2)
 		tipo = "viacep"
-	case <-time.After(time.Second * 2):
+		fmt.Printf("cep: %s \n tipo: %s \n", msg2, tipo)
+	case <-time.After(time.Second * 1):
 		fmt.Printf("timeout \n")
 	}
 
