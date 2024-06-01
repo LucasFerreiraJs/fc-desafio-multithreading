@@ -26,8 +26,11 @@ type Cep struct {
 }
 
 type CepResponse struct {
-	Cep  string
-	Tipo string
+	Cep    string
+	Street string
+	State  string
+	City   string
+	Tipo   string
 }
 
 type ApicepStruct struct {
@@ -64,9 +67,6 @@ func GetCepValue(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-
-	fmt.Printf("cep recebido: %s \n", cep)
-	fmt.Println()
 
 	ch1 := make(chan Cep)
 	ch2 := make(chan Cep)
@@ -123,18 +123,32 @@ func GetCepValue(w http.ResponseWriter, r *http.Request) {
 			UF:         apiResponse.Uf,
 			Tipo:       "viacep",
 		}
+		fmt.Println(response)
+
 		ch2 <- response
 	}()
 
 	tipo := ""
+	var response CepResponse
 
 	select {
 	case msg1 := <-ch1:
 		tipo = "apicep"
-		fmt.Printf("cep: %s \n tipo: %s \n", msg1, tipo)
+
+		response.Cep = msg1.Cep
+		response.Street = msg1.Logradouro
+		response.State = msg1.UF
+		response.City = msg1.Cidade
+		response.Tipo = tipo
+
 	case msg2 := <-ch2:
 		tipo = "viacep"
-		fmt.Printf("cep: %s \n tipo: %s \n", msg2, tipo)
+		response.Cep = msg2.Cep
+		response.Street = msg2.Logradouro
+		response.State = msg2.UF
+		response.City = msg2.Cidade
+		response.Tipo = tipo
+
 	case <-time.After(time.Second * 1):
 		fmt.Printf("timeout \n")
 	}
@@ -142,10 +156,10 @@ func GetCepValue(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 
-	response := CepResponse{
-		Cep:  cep,
-		Tipo: tipo,
-	}
+	// response := CepResponse{
+	// 	Cep:  cep,
+	// 	Tipo: tipo,
+	// }
 
 	json.NewEncoder(w).Encode(response)
 }
